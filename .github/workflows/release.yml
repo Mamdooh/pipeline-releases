@@ -1,0 +1,144 @@
+name: Create Platform Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      
+      - name: Get platform version
+        id: version
+        run: |
+          VERSION=$(yq '.platform_version' services.yaml)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Platform Version: $VERSION"
+      
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag $TAG already exists, skipping release creation"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag $TAG does not exist, will create release"
+          fi
+      
+      - name: Generate version.json
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PLATFORM_VERSION="${{ steps.version.outputs.version }}"
+          
+          # Start JSON
+          echo "{" > version.json
+          echo "  \"platform_version\": \"$PLATFORM_VERSION\"," >> version.json
+          echo "  \"released\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> version.json
+          echo "  \"services\": {" >> version.json
+          
+          # Get all services
+          SERVICES=$(yq '.services | keys | .[]' services.yaml)
+          
+          # Add each service
+          FIRST=true
+          for SERVICE in $SERVICES; do
+            VERSION=$(yq ".services.$SERVICE.version" services.yaml)
+            
+            if [ "$FIRST" = true ]; then
+              echo "    \"$SERVICE\": \"$VERSION\"" >> version.json
+              FIRST=false
+            else
+              echo "    ,\"$SERVICE\": \"$VERSION\"" >> version.json
+            fi
+          done
+          
+          # Close JSON
+          echo "  }" >> version.json
+          echo "}" >> version.json
+          
+          echo "Generated version.json:"
+          cat version.json
+      
+      - name: Generate release notes
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PLATFORM_VERSION="${{ steps.version.outputs.version }}"
+          
+          echo "## 🚀 Platform Release v$PLATFORM_VERSION" > release-notes.md
+          echo "" >> release-notes.md
+          echo "**Released:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "---" >> release-notes.md
+          echo "" >> release-notes.md
+          
+          echo "### 📦 Service Versions" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "| Service | Version | Repository |" >> release-notes.md
+          echo "|---------|---------|------------|" >> release-notes.md
+          
+          # Get all services
+          SERVICES=$(yq '.services | keys | .[]' services.yaml)
+          
+          for SERVICE in $SERVICES; do
+            VERSION=$(yq ".services.$SERVICE.version" services.yaml)
+            REPO=$(yq ".services.$SERVICE.repo" services.yaml)
+            echo "| $SERVICE | $VERSION | [View](https://github.com/$REPO/releases/tag/$VERSION) |" >> release-notes.md
+          done
+          
+          echo "" >> release-notes.md
+          echo "---" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### 📄 Configuration" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "See [services.yaml](https://github.com/${{ github.repository }}/blob/v$PLATFORM_VERSION/services.yaml) for full platform configuration." >> release-notes.md
+          echo "" >> release-notes.md
+          echo "---" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "### 📥 Downloads" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "- [version.json](https://github.com/${{ github.repository }}/releases/download/v$PLATFORM_VERSION/version.json) - Machine-readable version file" >> release-notes.md
+          
+          echo "Generated release notes:"
+          cat release-notes.md
+      
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: v${{ steps.version.outputs.version }}
+          name: Platform v${{ steps.version.outputs.version }}
+          bodyFile: release-notes.md
+          artifacts: version.json
+          token: ${{ secrets.GITHUB_TOKEN }}
+          makeLatest: true
+      
+      - name: Summary
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          echo "## ✅ Platform Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release URL:** https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Skip message
+        if: steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "## ⏭️ Release Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag v${{ steps.version.outputs.version }} already exists." >> $GITHUB_STEP_SUMMARY
