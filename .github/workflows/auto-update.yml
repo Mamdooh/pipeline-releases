@@ -3,6 +3,9 @@ name: Auto Update Service Version
 on:
   repository_dispatch:
     types: [service-update]
+permissions:
+  contents: write
+  pull-requests: write  
 
 jobs:
   update-version:
