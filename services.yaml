@@ -1,0 +1,14 @@
+platform_version: "1.0.0"
+updated: "2025-01-28T00:00:00Z"
+updated_by: "Initial Setup"
+
+services:
+  pipeline_dev:
+    repo: Mamdooh/pipeline_dev
+    version: v1.0.0
+    enabled: true
+
+  pipeline_dev_predictor:
+    repo: Mamdooh/pipeline_dev_predictor
+    version: v1.0.0
+    enabled: true
