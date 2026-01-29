@@ -1,6 +1,6 @@
-platform_version: "1.0.2"
-updated: "2026-01-29T05:49:59Z"
-updated_by: "Auto-update from pipeline_dev"
+platform_version: "1.0.3"
+updated: "2026-01-29T10:43:34Z"
+updated_by: "Auto-update from pipeline_dev_predictor"
 services:
   pipeline_dev:
     repo: Mamdooh/pipeline_dev
@@ -8,5 +8,5 @@ services:
     enabled: true
   pipeline_dev_predictor:
     repo: Mamdooh/pipeline_dev_predictor
-    version: v0.0.32
+    version: v0.0.40
     enabled: true
